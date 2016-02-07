@@ -287,11 +287,19 @@ static uint16_t getLinearServoValue(servoParam_t *servoConf, uint16_t servoValue
     return getServoValueAtAngle(servoConf, correctedAngle);
 }
 
+int16_t toggleServoReverse( const servoParam_t *servoConf, int16_t servoValue)
+{
+    //MIXER_TRI is only supposed to work with reserve in STABILIZED_YAW right?
+    return servoDirection(SERVO_RUDDER, INPUT_STABILIZED_YAW)*(servoValue - servoConf->middle) + servoConf->middle;
+}
 
 void triServoMixer()
 {
     static filterStatePt1_t feedbackFilter;
     tailServoADC = filterApplyPt1(adcGetChannel(ADC_EXTERNAL1), &feedbackFilter, 70, dT);
+
+    //normalize reverse
+    *gpTailServo = toggleServoReverse(gpTailServoConf, *gpTailServo);
 
     if (ARMING_FLAG(ARMED))
     {
@@ -301,6 +309,8 @@ void triServoMixer()
     triTailTuneStep(gpTailServoConf, gpTailServo);
 
     updateServoAngles();
+    //restore reverse
+    *gpTailServo = toggleServoReverse(gpTailServoConf, *gpTailServo);
 }
 
 int16_t triGetMotorCorrection(uint8_t motorIndex)
@@ -312,7 +322,7 @@ int16_t triGetMotorCorrection(uint8_t motorIndex)
         // Take motor speed up lag into account by shifting the phase of the curve
         // Not taking into account the motor braking lag (yet)
         const int16_t servoAngle = triGetCurrentActiveServoAngle() * 10.0f;
-        const int16_t servoSetpointAngle = getServoAngle(gpTailServoConf, *gpTailServo);
+        const int16_t servoSetpointAngle = getServoAngle(gpTailServoConf, toggleServoReverse(gpTailServoConf, *gpTailServo));
 
         const uint16_t maxPhaseShift = getPitchCorrectionMaxPhaseShift(servoAngle, servoSetpointAngle, tailMotorAccelerationDelay_angle, tailMotorDecelerationDelay_angle, tailMotorPitchZeroAngle);
 
